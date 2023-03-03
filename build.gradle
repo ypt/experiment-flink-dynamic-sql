@@ -1,0 +1,168 @@
+//buildscript {
+////    repositories {
+////        jcenter() // this applies only to the Gradle 'Shadow' plugin
+////    }
+//    dependencies {
+//        classpath 'com.github.jengelman.gradle.plugins:shadow:7.1.2'
+//    }
+//}
+
+plugins {
+    id 'java'
+    id 'application'
+    // shadow plugin to produce fat JARs
+    id "com.github.johnrengelman.shadow" version "7.1.2"
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+//mainClassName = 'org.myorg.quickstart.StreamingJob'
+mainClassName = 'com.example.flinkjobpulsartopostgresexample.StreamingJob'
+description = """Flink Quickstart Job"""
+
+ext {
+    javaVersion = '1.8'
+    flinkVersion = '1.14.4'
+    scalaBinaryVersion = '2.11'
+    slf4jVersion = '1.7.36'
+    log4jVersion = '2.17.2'
+}
+
+sourceCompatibility = javaVersion
+targetCompatibility = javaVersion
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+applicationDefaultJvmArgs = ["-Dlog4j.configurationFile=log4j2.properties"]
+
+//task wrapper(type: Wrapper) {
+//    gradleVersion = '3.1'
+//}
+
+repositories {
+    mavenCentral()
+//    maven { url "https://repository.apache.org/content/repositories/snapshots/" }
+}
+
+// NOTE: We cannot use "compileOnly" or "shadow" configurations since then we could not run code
+// in the IDE or with "gradle run". We also cannot exclude transitive dependencies from the
+// shadowJar yet (see https://github.com/johnrengelman/shadow/issues/159).
+// -> Explicitly define the // libraries we want to be included in the "flinkShadowJar" configuration!
+configurations {
+    flinkShadowJar // dependencies which go into the shadowJar
+
+    // always exclude these (also from transitive dependencies) since they are provided by Flink
+    flinkShadowJar.exclude group: 'org.apache.flink', module: 'force-shading'
+    flinkShadowJar.exclude group: 'com.google.code.findbugs', module: 'jsr305'
+
+
+//    Don't exclude logging libs, To fix this:
+//
+//    Caused by: java.lang.ClassNotFoundException: org.slf4j.bridge.SLF4JBridgeHandler
+//    	at java.net.URLClassLoader.findClass(URLClassLoader.java:387)
+//    	at java.lang.ClassLoader.loadClass(ClassLoader.java:418)
+//    	at org.apache.flink.util.FlinkUserCodeClassLoader.loadClassWithoutExceptionHandling(FlinkUserCodeClassLoader.java:64)
+//    	at org.apache.flink.util.ChildFirstClassLoader.loadClassWithoutExceptionHandling(ChildFirstClassLoader.java:65)
+//    	at org.apache.flink.util.FlinkUserCodeClassLoader.loadClass(FlinkUserCodeClassLoader.java:48)
+
+//    flinkShadowJar.exclude group: 'org.slf4j'
+//    flinkShadowJar.exclude group: 'org.apache.logging.log4j'
+}
+
+dependencies {
+    // --------------------------------------------------------------
+    // Compile-time dependencies that should NOT be part of the
+    // shadow jar and are provided in the lib folder of Flink
+    // --------------------------------------------------------------
+    implementation "org.apache.flink:flink-streaming-java_${scalaBinaryVersion}:${flinkVersion}"
+//    implementation "org.apache.flink:flink-streaming-java:${flinkVersion}"
+
+    // for table API
+    implementation "org.apache.flink:flink-table-api-java-bridge_${scalaBinaryVersion}:${flinkVersion}"
+    implementation "org.apache.flink:flink-table-planner_${scalaBinaryVersion}:${flinkVersion}"
+    implementation "org.apache.flink:flink-table-runtime_${scalaBinaryVersion}:${flinkVersion}"
+//    implementation "org.apache.flink:flink-table-api-java-bridge:${flinkVersion}"
+    implementation "org.apache.flink:flink-table-api-java:${flinkVersion}"
+    implementation "org.apache.flink:flink-json:${flinkVersion}"
+    implementation "org.apache.flink:flink-avro:${flinkVersion}"
+
+    // needed for pulsar connector
+    implementation "io.streamnative.connectors:flink-protobuf:2.7.6"
+
+
+    // Add this to run your Flink program locally
+    // https://ci.apache.org/projects/flink/flink-docs-stable/dev/local_execution.html
+    implementation "org.apache.flink:flink-clients_${scalaBinaryVersion}:${flinkVersion}"
+    // compile "org.apache.flink:flink-runtime_${scalaBinaryVersion}:${flinkVersion}"
+
+//    // Add this if you'd like to bring up the web ui at localhost:8081 via
+//    // StreamExecutionEnvironment.createLocalEnvironmentWithWebUI
+    implementation "org.apache.flink:flink-runtime-web_${scalaBinaryVersion}:${flinkVersion}"
+
+    implementation "org.apache.logging.log4j:log4j-api:${log4jVersion}"
+    implementation "org.apache.logging.log4j:log4j-core:${log4jVersion}"
+    implementation "org.apache.logging.log4j:log4j-slf4j-impl:${log4jVersion}"
+    implementation "org.slf4j:slf4j-log4j12:${slf4jVersion}"
+
+
+//    implementation 'io.streamnative.connectors:pulsar-flink-connector_2.12:1.14.3.1'
+
+    // --------------------------------------------------------------
+    // Dependencies that should be part of the shadow jar, e.g.
+    // connectors. These must be in the flinkShadowJar configuration!
+    // --------------------------------------------------------------
+    //flinkShadowJar "org.apache.flink:flink-connector-kafka_${scalaBinaryVersion}:${flinkVersion}"
+//    flinkShadowJar "io.streamnative.connectors:pulsar-flink-connector_${scalaBinaryVersion}:2.4.28.7"
+
+    // NOTE: As of Flink 1.14 (Pulsar source) 1.15 (Pulsar sink), the Flink Pulsar connector has been merged into Flink
+    // https://nightlies.apache.org/flink/flink-docs-release-1.14/docs/connectors/datastream/pulsar/
+    // https://nightlies.apache.org/flink/flink-docs-release-1.15/docs/connectors/datastream/pulsar/
+    // TODO: try it out, does it work w/ SQL env too?
+    flinkShadowJar "io.streamnative.connectors:pulsar-flink-connector_${scalaBinaryVersion}:1.14.3.3"
+
+    // Or, try the up to date Streamnative maintained connector: https://hub.streamnative.io/data-processing/pulsar-flink/1.15.0.1/
+
+    // Add this dependency, if you see the following exception at runtime
+    // java.lang.NoClassDefFoundError: Could not initialize class org.apache.pulsar.client.admin.internal.PulsarAdminImpl
+//    implementation 'org.apache.pulsar:pulsar-client-all:2.10.0'
+    flinkShadowJar 'org.apache.pulsar:pulsar-client-all:2.10.0'
+
+//    flinkShadowJar 'org.slf4j:jul-to-slf4j:1.7.36'
+
+
+
+
+
+
+    // Add test dependencies here.
+    // testCompile "junit:junit:4.12"
+}
+
+// make compileOnly dependencies available for tests:
+sourceSets {
+    main.compileClasspath += configurations.flinkShadowJar
+    main.runtimeClasspath += configurations.flinkShadowJar
+
+    test.compileClasspath += configurations.flinkShadowJar
+    test.runtimeClasspath += configurations.flinkShadowJar
+
+    javadoc.classpath += configurations.flinkShadowJar
+}
+
+run.classpath = sourceSets.main.runtimeClasspath
+
+jar {
+    manifest {
+        attributes 'Built-By': System.getProperty('user.name'),
+                'Build-Jdk': System.getProperty('java.version')
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.flinkShadowJar]
+}
+
+//test {
+//    useJUnitPlatform()
+//}
